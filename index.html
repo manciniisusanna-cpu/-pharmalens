@@ -5687,4 +5687,36 @@ const h=location.hash.slice(1); if(["terapia","prot","schede","dosi","esame","ec
   }
 })();
 </script>
+<script>
+/* PWA: le funzioni con foto aprono la versione su Claude */
+(function(){
+  if(window.claude && window.claude.use) return;
+  var URL_CLAUDE="https://claude.ai/artifact/MecXcMjin9uVZLC2MemvJ7";
+  var css=document.createElement("style");
+  css.textContent="#toclaude{position:fixed;inset:0;z-index:200;background:rgba(5,20,35,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px}"+
+  "#toclaude[hidden]{display:none!important}"+
+  "#toclaude .box{background:var(--surface);color:var(--ink);border-radius:18px;max-width:440px;width:100%;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 20px 40px rgba(0,0,0,.35);display:grid;gap:10px}"+
+  "#toclaude h3{margin:0;font-family:var(--f-display);font-size:21px;text-transform:uppercase;color:var(--accent)}"+
+  "#toclaude p{margin:0;font-size:14.5px}#toclaude small{color:var(--muted);font-size:12.5px}"+
+  "#toclaude a{display:block;text-align:center;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:16px;padding:13px;border-radius:10px;text-decoration:none}"+
+  "#toclaude button{font-size:15px;padding:11px;border-radius:10px}";
+  document.head.appendChild(css);
+  var m=document.createElement("div"); m.id="toclaude"; m.hidden=true;
+  m.innerHTML='<div class="box" role="dialog" aria-modal="true" aria-labelledby="tch"><h3 id="tch">📷 Lettura da foto</h3>'+
+    '<p>La lettura da foto usa l\'intelligenza artificiale e funziona nella versione di Pharmalens su Claude.</p>'+
+    '<small>Serve internet e l\'accesso a Claude. Quello che hai scritto qui non viene trasferito: lì riparti dalla foto.</small>'+
+    '<a href="'+URL_CLAUDE+'" target="_blank" rel="noopener">Apri Pharmalens su Claude</a>'+
+    '<button type="button">Annulla</button></div>';
+  document.body.appendChild(m);
+  function open(){ m.hidden=false; }
+  m.addEventListener("click",function(e){ if(e.target===m||e.target.tagName==="BUTTON"||e.target.tagName==="A") m.hidden=true; });
+  document.addEventListener("keydown",function(e){ if(e.key==="Escape") m.hidden=true; });
+  ["photo","photos","ecgcam","ecgfile","monfile"].forEach(function(id){
+    var el=document.getElementById(id); if(!el) return;
+    el.addEventListener("click",function(e){ e.preventDefault(); e.stopImmediatePropagation(); open(); },true);
+  });
+  var pw=document.getElementById("photowrap"); if(pw) pw.hidden=false;
+  var ps=document.getElementById("pstatus"); if(ps) ps.textContent="Apre la versione su Claude (serve internet).";
+})();
+</script>
 </body></html>
