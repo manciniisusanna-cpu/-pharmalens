@@ -5655,7 +5655,7 @@ $("miss").addEventListener("click",e=>{const b=e.target.closest("button.look"); 
 })();
 
 $("today").textContent=new Date().toLocaleDateString("it-IT");
-$("inp").value=EX[0]; render(); renderDosi(); renderGloss(); renderDbState();
+$("inp").value=""; render(); renderDosi(); renderGloss(); renderDbState();
 const h=location.hash.slice(1); if(["terapia","prot","schede","dosi","esame","ecg","proc","util","glossario"].includes(h)) show(h); if(h==="protocolli") show("prot"); if(h==="fonti") setTimeout(()=>$("fonti").scrollIntoView(),50); if(h==="pacing"){ show("proc"); setProc("pace"); } if(h==="ventilatore"){ show("proc"); setProc("vent"); }
 </script>
 
