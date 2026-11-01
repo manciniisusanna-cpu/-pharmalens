@@ -8,6 +8,86 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pharmalens">
 <title>Pharmalens</title>
+<script>
+/* PWA: collegamento diretto all'AI di Anthropic con la chiave API salvata solo su questo dispositivo */
+(function(){
+  if(window.claude) return; // dentro Claude usa il collegamento nativo
+  var K="pharmalens_api_key", M="pharmalens_model", FALLBACK="claude-sonnet-4-5";
+  function get(k){ try{ return localStorage.getItem(k)||""; }catch(e){ return ""; } }
+  function set(k,v){ try{ if(v) localStorage.setItem(k,v); else localStorage.removeItem(k); }catch(e){} }
+  var key=get(K);
+  window.PHARMA_AI={ hasKey:!!key, setKey:function(v){ set(K,v); set(M,""); }, clearKey:function(){ set(K,""); set(M,""); } };
+  if(!key) return;
+  var API="https://api.anthropic.com/v1/";
+  function hdr(){ return {"x-api-key":get(K),"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"}; }
+  function err(code,msg,extra){ var e=new Error(msg||code); e.code=code; if(extra) for(var x in extra) e[x]=extra[x]; return e; }
+  async function model(){
+    var m=get(M); if(m) return m;
+    try{
+      var r=await fetch(API+"models?limit=100",{headers:hdr()});
+      if(r.ok){ var j=await r.json(); var ids=(j.data||[]).map(function(d){return d.id});
+        m=ids.find(function(i){return /sonnet/.test(i)})||ids[0]; }
+    }catch(e){}
+    m=m||FALLBACK; set(M,m); return m;
+  }
+  function toJpeg(file){
+    return new Promise(function(res,rej){
+      var url=URL.createObjectURL(file), img=new Image();
+      img.onload=function(){
+        var max=1568, w=img.naturalWidth, h=img.naturalHeight, s=Math.min(1,max/Math.max(w,h));
+        var c=document.createElement("canvas"); c.width=Math.round(w*s); c.height=Math.round(h*s);
+        c.getContext("2d").drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url);
+        res(c.toDataURL("image/jpeg",0.85).split(",")[1]);
+      };
+      img.onerror=function(){ URL.revokeObjectURL(url); rej(err("image_rejected","Foto non valida: riprova con una foto JPG o PNG.")); };
+      img.src=url;
+    });
+  }
+  function parse(t){
+    var x=String(t||"").replace(/```json|```/g,"").trim();
+    try{ return JSON.parse(x); }catch(e){}
+    var a=x.search(/[\[{]/), b=Math.max(x.lastIndexOf("]"),x.lastIndexOf("}"));
+    if(a>=0&&b>a){ try{ return JSON.parse(x.slice(a,b+1)); }catch(e){} }
+    throw err("invalid_json","Risposta non leggibile",{text:x});
+  }
+  async function call(prompt,opts,retry){
+    opts=opts||{};
+    if(navigator.onLine===false) throw err("offline","Sei offline: la lettura richiede la connessione.");
+    var content=[];
+    var imgs=opts.images||[];
+    for(var i=0;i<imgs.length;i++) content.push({type:"image",source:{type:"base64",media_type:"image/jpeg",data:await toJpeg(imgs[i])}});
+    content.push({type:"text",text:prompt+"\n\nRispondi esclusivamente con JSON valido, senza testo prima o dopo."});
+    var m=await model(), r;
+    try{
+      r=await fetch(API+"messages",{method:"POST",headers:hdr(),signal:opts.signal,
+        body:JSON.stringify({model:m,max_tokens:4096,messages:[{role:"user",content:content}]})});
+    }catch(e){
+      if(e&&e.name==="AbortError") throw e;
+      throw err("offline","Connessione non riuscita: controlla internet e riprova.");
+    }
+    if(!r.ok){
+      var j={}; try{ j=await r.json(); }catch(e){}
+      var msg=(j.error&&j.error.message)||"";
+      if(r.status===404&&!retry){ set(M,FALLBACK===m?"":FALLBACK); return call(prompt,opts,true); }
+      if(r.status===401) throw err("bad_key","Chiave API non valida: controllala nella Home, sezione Intelligenza artificiale.");
+      if(r.status===429) throw err("rate_limited","Troppe richieste: riprova tra poco.");
+      if(/credit/i.test(msg)) throw err("no_credit","Credito API esaurito: ricarica su console.anthropic.com.");
+      if(r.status===400&&/image/i.test(msg)) throw err("image_rejected","Foto non valida o troppo grande.");
+      if(r.status>=500) throw err("busy","Servizio AI momentaneamente occupato: riprova tra poco.");
+      throw err("api_error","Errore AI: "+(msg||r.status));
+    }
+    var d=await r.json();
+    var txt=(d.content||[]).filter(function(c){return c.type==="text"}).map(function(c){return c.text}).join("");
+    if(d.stop_reason==="refusal") throw err("refused","L'AI non ha voluto leggere questa foto.");
+    return parse(txt);
+  }
+  var SHIM={
+    limits:async function(){ return {images:{mediaTypes:["image/*"],maxCount:4}}; },
+    json:function(p,o){ return call(p,o,false); }
+  };
+  window.claude={__pwa:true, use:async function(n){ return n==="sample"?SHIM:null; }};
+})();
+</script>
 </head><body>
 <title>Pharmalens</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -5662,7 +5742,7 @@ const h=location.hash.slice(1); if(["terapia","prot","schede","dosi","esame","ec
 <script>
 /* PWA: fuori da Claude carica gli aggiornamenti dal file farmaci.json e attiva il funzionamento offline */
 (function(){
-  if(!(window.claude && window.claude.use)){
+  if(!window.claude || window.claude.__pwa){
     fetch("farmaci.json",{cache:"no-cache"}).then(function(r){return r.ok?r.json():null}).then(function(j){
       if(!j) return;
       EXTRA=(j.farmaci||[]).map(function(d){return fromDoc(d.id,d.data||{})}).filter(Boolean);
@@ -5688,35 +5768,90 @@ const h=location.hash.slice(1); if(["terapia","prot","schede","dosi","esame","ec
 })();
 </script>
 <script>
-/* PWA: le funzioni con foto aprono la versione su Claude */
+/* PWA: impostazione della chiave AI e pulsanti foto */
 (function(){
-  if(window.claude && window.claude.use) return;
+  var AI=window.PHARMA_AI; if(!AI) return; // dentro Claude: niente da fare
   var URL_CLAUDE="https://claude.ai/artifact/MecXcMjin9uVZLC2MemvJ7";
   var css=document.createElement("style");
-  css.textContent="#toclaude{position:fixed;inset:0;z-index:200;background:rgba(5,20,35,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px}"+
-  "#toclaude[hidden]{display:none!important}"+
-  "#toclaude .box{background:var(--surface);color:var(--ink);border-radius:18px;max-width:440px;width:100%;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 20px 40px rgba(0,0,0,.35);display:grid;gap:10px}"+
-  "#toclaude h3{margin:0;font-family:var(--f-display);font-size:21px;text-transform:uppercase;color:var(--accent)}"+
-  "#toclaude p{margin:0;font-size:14.5px}#toclaude small{color:var(--muted);font-size:12.5px}"+
-  "#toclaude a{display:block;text-align:center;background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:16px;padding:13px;border-radius:10px;text-decoration:none}"+
-  "#toclaude button{font-size:15px;padding:11px;border-radius:10px}";
+  css.textContent="#aimodal{position:fixed;inset:0;z-index:200;background:rgba(5,20,35,.55);display:flex;align-items:flex-end;justify-content:center;padding:16px}"+
+  "#aimodal[hidden]{display:none!important}"+
+  "#aimodal .box{background:var(--surface);color:var(--ink);border-radius:18px;max-width:460px;width:100%;max-height:90vh;overflow:auto;padding:18px 18px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 20px 40px rgba(0,0,0,.35);display:grid;gap:10px}"+
+  "#aimodal h3{margin:0;font-family:var(--f-display);font-size:21px;text-transform:uppercase;color:var(--accent)}"+
+  "#aimodal p,#aimodal li{margin:0;font-size:14.5px}#aimodal ol{margin:0;padding-left:20px;display:grid;gap:4px}#aimodal small{color:var(--muted);font-size:12.5px}"+
+  "#aimodal .pri{display:block;width:100%;text-align:center;background:var(--accent);color:var(--accent-ink);border:0;font-weight:700;font-size:16px;padding:13px;border-radius:10px;text-decoration:none;cursor:pointer}"+
+  "#aimodal .sec{display:block;width:100%;text-align:center;font-size:15px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);text-decoration:none;cursor:pointer}"+
+  "#aimodal input{font:inherit;font-size:16px;width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}"+
+  "#aimodal .err{color:var(--crit);font-weight:700;font-size:13.5px}#aimodal a.lk{color:var(--accent)}"+
+  ".aipanel{display:grid;gap:8px}.aipanel .row{margin-top:0}.aion{color:var(--ok);font-weight:700}";
   document.head.appendChild(css);
-  var m=document.createElement("div"); m.id="toclaude"; m.hidden=true;
-  m.innerHTML='<div class="box" role="dialog" aria-modal="true" aria-labelledby="tch"><h3 id="tch">📷 Lettura da foto</h3>'+
-    '<p>La lettura da foto usa l\'intelligenza artificiale e funziona nella versione di Pharmalens su Claude.</p>'+
-    '<small>Serve internet e l\'accesso a Claude. Quello che hai scritto qui non viene trasferito: lì riparti dalla foto.</small>'+
-    '<a href="'+URL_CLAUDE+'" target="_blank" rel="noopener">Apri Pharmalens su Claude</a>'+
-    '<button type="button">Annulla</button></div>';
-  document.body.appendChild(m);
-  function open(){ m.hidden=false; }
-  m.addEventListener("click",function(e){ if(e.target===m||e.target.tagName==="BUTTON"||e.target.tagName==="A") m.hidden=true; });
+  var m=document.createElement("div"); m.id="aimodal"; m.hidden=true; document.body.appendChild(m);
+  m.addEventListener("click",function(e){ if(e.target===m) m.hidden=true; });
   document.addEventListener("keydown",function(e){ if(e.key==="Escape") m.hidden=true; });
+  function close(){ m.hidden=true; }
+
+  function choice(){
+    m.innerHTML='<div class="box" role="dialog" aria-modal="true"><h3>📷 Lettura da foto</h3>'+
+      '<p>Per leggere le foto serve l\'intelligenza artificiale e una connessione a internet.</p>'+
+      '<button class="pri" id="ai-setup">Collega l\'AI a questa app</button>'+
+      '<small>Una volta sola: serve una chiave API Anthropic (a consumo, pochi centesimi per foto).</small>'+
+      '<a class="sec" href="'+URL_CLAUDE+'" target="_blank" rel="noopener">Oppure apri la versione su Claude</a>'+
+      '<button class="sec" id="ai-x">Annulla</button></div>';
+    m.hidden=false;
+    document.getElementById("ai-setup").onclick=setup;
+    document.getElementById("ai-x").onclick=close;
+    m.querySelector("a.sec").addEventListener("click",close);
+  }
+  function setup(){
+    m.innerHTML='<div class="box" role="dialog" aria-modal="true"><h3>Collega l\'AI</h3>'+
+      '<ol><li>Apri <a class="lk" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a> e accedi (o crea un account).</li>'+
+      '<li>In <b>Billing</b> aggiungi un credito (es. 5 $) e imposta un limite di spesa.</li>'+
+      '<li>In <b>API keys</b> crea una chiave e copiala (inizia con <code>sk-ant-</code>).</li>'+
+      '<li>Incollala qui sotto.</li></ol>'+
+      '<input id="ai-key" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-...">'+
+      '<p class="err" id="ai-err" hidden></p>'+
+      '<button class="pri" id="ai-save">Salva e verifica</button>'+
+      '<small>La chiave resta solo su questo telefono, non su GitHub. Le foto vengono inviate ad Anthropic per la lettura: inquadra solo farmaci, tracciati e schermi, mai nomi o dati del paziente.</small>'+
+      '<button class="sec" id="ai-x">Annulla</button></div>';
+    m.hidden=false;
+    document.getElementById("ai-x").onclick=close;
+    document.getElementById("ai-save").onclick=async function(){
+      var v=document.getElementById("ai-key").value.trim(), er=document.getElementById("ai-err"), b=this;
+      er.hidden=true;
+      if(!/^sk-ant-/.test(v)){ er.textContent="La chiave deve iniziare con sk-ant-"; er.hidden=false; return; }
+      b.disabled=true; b.textContent="Verifica in corso…";
+      try{
+        var r=await fetch("https://api.anthropic.com/v1/models?limit=1",{headers:{"x-api-key":v,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}});
+        if(r.status===401||r.status===403){ throw new Error("Chiave non valida: ricontrollala."); }
+        if(!r.ok) throw new Error("Verifica non riuscita ("+r.status+"): riprova.");
+        AI.setKey(v); b.textContent="✓ Collegata"; setTimeout(function(){ location.reload(); },700);
+      }catch(e){
+        er.textContent=(e&&e.message&&!/fetch/i.test(e.message))?e.message:"Connessione non riuscita: serve internet."; er.hidden=false;
+        b.disabled=false; b.textContent="Salva e verifica";
+      }
+    };
+  }
+
+  /* pannello nella Home */
+  var home=document.getElementById("v-home");
+  if(home){
+    var p=document.createElement("div"); p.className="panel aipanel";
+    p.innerHTML='<div class="sechead"><h2>Intelligenza artificiale</h2></div>'+
+      (AI.hasKey?'<p><span class="aion">✓ Collegata</span>: lettura da foto di farmaci, ECG e monitor attiva (serve internet).</p><div class="row"><button id="ai-chg">Cambia chiave</button><button id="ai-del">Scollega</button></div>'
+               :'<p>Non collegata: collegala per leggere direttamente le foto di farmaci, ECG e monitor.</p><div class="row"><button class="primary" id="ai-on">Collega l\'AI</button></div>');
+    home.appendChild(p);
+    var on=document.getElementById("ai-on"); if(on) on.onclick=setup;
+    var ch=document.getElementById("ai-chg"); if(ch) ch.onclick=setup;
+    var dl=document.getElementById("ai-del"); if(dl) dl.onclick=function(){ if(confirm("Scollegare l'AI da questo telefono?")){ AI.clearKey(); location.reload(); } };
+  }
+
+  if(AI.hasKey) return; // con la chiave le foto funzionano direttamente
+
   ["photo","photos","ecgcam","ecgfile","monfile"].forEach(function(id){
     var el=document.getElementById(id); if(!el) return;
-    el.addEventListener("click",function(e){ e.preventDefault(); e.stopImmediatePropagation(); open(); },true);
+    el.addEventListener("click",function(e){ e.preventDefault(); e.stopImmediatePropagation(); choice(); },true);
   });
   var pw=document.getElementById("photowrap"); if(pw) pw.hidden=false;
-  var ps=document.getElementById("pstatus"); if(ps) ps.textContent="Apre la versione su Claude (serve internet).";
+  var ps=document.getElementById("pstatus"); if(ps) ps.textContent="Per leggere le foto collega l'AI (serve internet).";
 })();
 </script>
 </body></html>
