@@ -1,9 +1,8 @@
 /* Pharmalens – service worker: funziona anche senza rete.
    Quando pubblichi una nuova versione dell'app, cambia il numero qui sotto. */
-const VERSION = "pharmalens-v2";
+const VERSION = "pharmalens-v3";
 const CORE = ["index.html", "farmaci.json", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];
-const FONTS = "https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap";
 
 async function precache() {
   const c = await caches.open(VERSION);
@@ -11,7 +10,6 @@ async function precache() {
   for (const u of CORE) {
     try { const r = await fetch(u, { cache: "reload" }); if (r.ok) await c.put(u, r); } catch (e) {}
   }
-  try { const r = await fetch(FONTS, { mode: "no-cors" }); await c.put(FONTS, r); } catch (e) {}
 }
 self.addEventListener("install", e => { e.waitUntil(precache().then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
@@ -37,7 +35,7 @@ self.addEventListener("fetch", e => {
     }).catch(() => caches.open(VERSION).then(c => c.match(key)).then(hit => hit || Response.error())));
     return;
   }
-  if (same || url.hostname.endsWith("fonts.googleapis.com") || url.hostname.endsWith("fonts.gstatic.com")) {
+  if (same) {
     e.respondWith(caches.match(req, { ignoreSearch: same }).then(hit => hit || fetch(req).then(r => {
       if (r.ok || r.type === "opaque") { const cp = r.clone(); caches.open(VERSION).then(c => c.put(req, cp)); }
       return r;
