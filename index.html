@@ -993,7 +993,7 @@ h1 a.hlink{color:inherit;text-decoration:none}
       <span class="htxt"><b>Bibliografia</b><small>Da dove vengono i contenuti</small></span>
     </button>
   </div>
-  <div class="panel" id="fonti">
+  <style>body.bibmode #v-home>*:not(#fonti){display:none!important}</style><div class="panel" id="fonti" hidden>
     <div class="sechead"><h2>Bibliografia</h2><span class="count">fonti dei contenuti</span></div>
       <section class="bib"><h3>Rianimazione, aritmie, pacing, cardioversione</h3><ol><li>Soar J, et al. European Resuscitation Council Guidelines 2021: Adult advanced life support (comprese le aritmie peri-arresto). <i>Resuscitation</i> 2021;161:115–151.</li><li>Van de Voorde P, et al. European Resuscitation Council Guidelines 2021: Paediatric Life Support. <i>Resuscitation</i> 2021;161:327–387.</li><li>Nolan JP, et al. ERC–ESICM Guidelines 2021: Post-resuscitation care. <i>Resuscitation</i> 2021;161:220–269.</li><li>Advanced Life Support Group. <i>Advanced Paediatric Life Support (APLS)</i>: stime del peso per età e dosi pediatriche d'urgenza.</li><li>Byrne RA, et al. 2023 ESC Guidelines for the management of acute coronary syndromes. <i>Eur Heart J</i> 2023;44:3720–3826.</li></ol></section>
       <section class="bib"><h3>Ventilazione e ossigeno</h3><ol><li>The Acute Respiratory Distress Syndrome Network. Ventilation with lower tidal volumes as compared with traditional tidal volumes for acute lung injury and ARDS. <i>N Engl J Med</i> 2000;342:1301–1308 (peso ideale, Vt 6 ml/kg).</li><li>ARDS Definition Task Force. Acute Respiratory Distress Syndrome: the Berlin Definition. <i>JAMA</i> 2012;307:2526–2533 (classi del rapporto P/F).</li><li>Rice TW, et al. Comparison of the SpO₂/FiO₂ ratio and the PaO₂/FiO₂ ratio in patients with acute lung injury or ARDS. <i>Chest</i> 2007;132:410–417.</li><li>Rochwerg B, et al. Official ERS/ATS clinical practice guidelines: noninvasive ventilation for acute respiratory failure. <i>Eur Respir J</i> 2017;50:1602426.</li><li>O'Driscoll BR, et al. BTS guideline for oxygen use in adults in healthcare and emergency settings. <i>Thorax</i> 2017;72(Suppl 1):ii1–ii90 (obiettivi di SpO₂, presidi e FiO₂).</li></ol></section>
@@ -5535,6 +5535,7 @@ renderProc();
 /* ---------- Navigazione ---------- */
 function show(v){
   ["home","terapia","prot","schede","dosi","esame","ecg","proc","util","glossario"].forEach(n=>{$("v-"+n).hidden=n!==v;});
+  document.body.classList.remove("bibmode"); $("fonti").hidden=true;
   if(v==="prot") renderProt();
   if(v==="dosi"||v==="util"){ const pp=$("pazpanel"), host=$("v-"+v); if(pp.parentNode!==host) host.insertBefore(pp,host.firstChild); renderDosi(); }
   if(v==="util"){ if(!$("s-ust").hidden) renderBurn(); else renderO2(); }
@@ -5641,11 +5642,11 @@ $("pbody").addEventListener("click",e=>{
 renderProt();
 /* ---------- Home ---------- */
 const PTITLE={prot:"Protocolli",terapia:"Terapia",schede:"Schede farmaco",dosi:"Dosi",esame:"Esame obiettivo",ecg:"ECG",proc:"Procedure",util:"Utility",glossario:"Glossario"};
-function setBar(v,t){ $("pagebar").hidden=v==="home"; $("pagetitle").textContent=t||PTITLE[v]||""; }
+function setBar(v,t){ $("pagebar").hidden=v==="home"&&!document.body.classList.contains("bibmode"); $("pagetitle").textContent=t||PTITLE[v]||""; }
 $("backhome").addEventListener("click",()=>{ show("home"); window.scrollTo(0,0); });
 document.querySelectorAll(".htile").forEach(b=>b.addEventListener("click",()=>{
   const v=b.dataset.go, p=b.dataset.proc, u=b.dataset.util;
-  if(u==="fonti"){ $("fonti").scrollIntoView({behavior:"smooth"}); return; }
+  if(u==="fonti"){ show("home"); document.body.classList.add("bibmode"); $("fonti").hidden=false; setBar("home","Bibliografia"); window.scrollTo(0,0); return; }
   show(v); window.scrollTo(0,0);
   if(p) setProc(p);
   if(u) setUtil(u);
@@ -5737,7 +5738,7 @@ $("miss").addEventListener("click",e=>{const b=e.target.closest("button.look"); 
 
 $("today").textContent=new Date().toLocaleDateString("it-IT");
 $("inp").value=""; render(); renderDosi(); renderGloss(); renderDbState();
-const h=location.hash.slice(1); if(["terapia","prot","schede","dosi","esame","ecg","proc","util","glossario"].includes(h)) show(h); if(h==="protocolli") show("prot"); if(h==="fonti") setTimeout(()=>$("fonti").scrollIntoView(),50); if(h==="pacing"){ show("proc"); setProc("pace"); } if(h==="ventilatore"){ show("proc"); setProc("vent"); }
+const h=location.hash.slice(1); if(["terapia","prot","schede","dosi","esame","ecg","proc","util","glossario"].includes(h)) show(h); if(h==="protocolli") show("prot"); if(h==="fonti") document.querySelector('.htile[data-util="fonti"]').click(); if(h==="pacing"){ show("proc"); setProc("pace"); } if(h==="ventilatore"){ show("proc"); setProc("vent"); }
 </script>
 
 <script>
