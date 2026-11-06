@@ -1,7 +1,7 @@
 /* Pharmalens – service worker: funziona anche senza rete.
    Quando pubblichi una nuova versione dell'app, cambia il numero qui sotto. */
-const VERSION = "pharmalens-v3";
-const CORE = ["index.html", "farmaci.json", "manifest.webmanifest",
+const VERSION = "pharmalens-v4";
+const CORE = ["index.html", "farmaci.json", "aifa.json", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/icon-maskable-512.png", "icons/apple-touch-icon.png"];
 
 async function precache() {
@@ -26,8 +26,9 @@ self.addEventListener("fetch", e => {
   const url = new URL(req.url);
   const same = url.origin === location.origin;
   const isPage = req.mode === "navigate" || (same && url.pathname.endsWith("/index.html"));
-  if (isPage || (same && url.pathname.endsWith("farmaci.json"))) {
-    const key = isPage ? "index.html" : "farmaci.json";
+  const dataFile = same && (url.pathname.endsWith("farmaci.json") || url.pathname.endsWith("aifa.json"));
+  if (isPage || dataFile) {
+    const key = isPage ? "index.html" : url.pathname.split("/").pop();
     // prima la rete (per gli aggiornamenti) ma con limite di 4 s, poi la copia salvata
     e.respondWith(Promise.race([fetch(req), timeout(4000)]).then(r => {
       if (r.ok) { const cp = r.clone(); caches.open(VERSION).then(c => c.put(key, cp)); }
